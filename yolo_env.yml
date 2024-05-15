@@ -1,4 +1,4 @@
-name: cropvideo
+name: yolo
 channels:
   - conda-forge
   - pytorch
@@ -10,3 +10,4 @@ dependencies:
     - torch
     - torchvision
     - ultralytics
+    - gdown
