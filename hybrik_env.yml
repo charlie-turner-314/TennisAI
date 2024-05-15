@@ -1,0 +1,24 @@
+name: hybrik
+channels:
+  - conda-forge
+  - pytorch
+  - iopath
+  - fvcore
+  - bottler
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - fvcore
+  - iopath
+  - ipykernel
+  - pytorch
+  - numpy
+  - pip:
+    - torchvision
+    - scipy
+    - pillow==6.2
+    - numpy==1.23.1
+    - git+https://github.com/facebookresearch/pytorch3d.git@stable
+    - opencv-python
+

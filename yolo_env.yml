@@ -1,0 +1,12 @@
+name: cropvideo
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.9
+  - ipykernel
+  - pip
+  - pip:
+    - torch
+    - torchvision
+    - ultralytics
