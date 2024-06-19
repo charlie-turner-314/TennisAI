@@ -22,7 +22,7 @@ dependencies:
   - pip
   - pip:
     - scipy
-    - pillow==6.2
+    - pillow
     - numpy==1.23.1
     - opencv-python
 
