@@ -168,7 +168,12 @@ def pixel_to_court_coords(
 
 
 def correct_hybrik_mesh(
-    processed_mesh_file, pose_file, video_file, lines_file, out_dir, save_video=False
+    processed_mesh_file: str,
+    pose_file: str,
+    video_file: str,
+    lines_file: str,
+    out_dir: str,
+    save_video: bool = False,
 ):
     # use first frame
     frame = 0

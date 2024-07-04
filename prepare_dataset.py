@@ -8,7 +8,9 @@ import time
 from dataset_preparation.player_detection.player_detect import detect_player
 from dataset_preparation.player_detection.crop_video import crop_video
 from dataset_preparation.estimate_pose.estimate_pose import detect_pose
-from Training.vid2player3d.process_hybrik_data import process_hybrik
+from dataset_preparation.trajectory_correction.correct_trajectory import (
+    correct_hybrik_mesh,
+)
 
 
 class COLORS:
@@ -107,31 +109,45 @@ for video_name in all_videos:
     # ======================
     # TODO: this takes a while -> perhaps a tag in the filename that says which long-form video it came from, then only do that once.
     # step 1: Convert the video to an avi with ffmpeg
-    infile = video_path
+    # infile = video_path
     avi_file = os.path.join(aux_dir, "avi", "video.avi")
-    os.makedirs(os.path.dirname(avi_file), exist_ok=True)
-    command = f"ffmpeg -i {infile} -vcodec mjpeg -q:v 3 -acodec pcm_s16le {avi_file} -loglevel quiet -y"
-    os.system(command)
-    # Run the c++ application to detect tennis court lines in the video
+    # os.makedirs(os.path.dirname(avi_file), exist_ok=True)
+    # command = f"ffmpeg -i {infile} -vcodec mjpeg -q:v 3 -acodec pcm_s16le {avi_file} -loglevel quiet -y"
+    # os.system(command)
+    # # Run the c++ application to detect tennis court lines in the video
     lines_file = os.path.join(aux_dir, "lines", f"{video_name}.txt")
-    os.makedirs(os.path.dirname(lines_file), exist_ok=True)
-    command = f"dataset_preparation/court_detection/tennis-court-detection/build/bin/detect {avi_file} {lines_file}"
-    os.system(command)
+    # os.makedirs(os.path.dirname(lines_file), exist_ok=True)
+    # command = f"dataset_preparation/court_detection/tennis-court-detection/build/bin/detect {avi_file} {lines_file}"
+    # os.system(command)
     # ======================
     # Process HybrIK Data (Rotate to global frame)
     # ======================
-    hybrik_file = os.path.join(aux_dir, "pose_3d", f"res_{video_name}.pk")
-    output_file = os.path.join(aux_dir, "pose_3d", "processed", f"{video_name}.pkl")
+    hybrik_file = os.path.abspath(
+        os.path.join(aux_dir, "pose_3d", f"res_{video_name}.pk")
+    )
+    output_file = os.path.abspath(
+        os.path.join(aux_dir, "pose_3d", "processed", f"{video_name}.pkl")
+    )
+    os.chdir("Training/vid2player3d")
+    from Training.vid2player3d.process_hybrik_data import process_hybrik
+
     process_hybrik(input_file=hybrik_file, output_file=output_file)
+    os.chdir("../..")
     # ======================
     # Convert root position and orientation to court coordinates
     # ======================
-    pass
+    correct_hybrik_mesh(
+        processed_mesh_file=output_file,
+        pose_file=os.path.join(aux_dir, "pose", f"{video_name}.json"),
+        video_file=avi_file,
+        lines_file=lines_file,
+        out_dir=os.path.join(aux_dir, "pose", "corrected"),
+        save_video=True,
+    )
 
 # **********************
 # Prepare Master PKL File
 # **********************
-pass
 
 # **********************
 # Collate Into motion_lib dataset
