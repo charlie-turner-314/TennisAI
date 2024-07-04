@@ -1,6 +1,7 @@
 [submodule "Training/vid2player3d"]
 	path = Training/vid2player3d
 	url = https://github.com/charlie-turner-314/vid2player3d
+	branch = main
 [submodule "CourtDetection/tennis-court-detection"]
 	path = CourtDetection/tennis-court-detection
 	url = https://github.com/gchlebus/tennis-court-detection
