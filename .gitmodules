@@ -2,6 +2,6 @@
 	path = Training/vid2player3d
 	url = https://github.com/charlie-turner-314/vid2player3d
 	branch = main
-[submodule "CourtDetection/tennis-court-detection"]
-	path = CourtDetection/tennis-court-detection
+[submodule "dataset_preparation/court_detection/tennis-court-detection"]
+	path = dataset_preparation/court_detection/tennis-court-detection
 	url = https://github.com/gchlebus/tennis-court-detection
