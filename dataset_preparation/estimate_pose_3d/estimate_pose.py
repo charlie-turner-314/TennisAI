@@ -136,8 +136,8 @@ def estimate_pose_3d(video_name, out_dir, save_video=False, device="cuda:0"):
     else:
         hybrik_model.load_state_dict(save_dict)
 
-    det_model.cpu()
-    hybrik_model.cpu()
+    det_model.to(device)
+    hybrik_model.to(device)
     det_model.eval()
     hybrik_model.eval()
 
@@ -208,6 +208,8 @@ def estimate_pose_3d(video_name, out_dir, save_video=False, device="cuda:0"):
             # Run Detection
             input_image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
             det_input = det_transform(input_image)
+            # move det_input to device
+            det_input = det_input.to(device)
             det_output = det_model([det_input])[0]
 
             if prev_box is None:
@@ -224,7 +226,7 @@ def estimate_pose_3d(video_name, out_dir, save_video=False, device="cuda:0"):
             pose_input, bbox, img_center = transformation.test_transform(
                 input_image, tight_bbox
             )
-            pose_input = pose_input[None, :, :, :]
+            pose_input = pose_input[None, :, :, :].to(device)
             pose_output = hybrik_model(
                 pose_input,
                 flip_test=True,

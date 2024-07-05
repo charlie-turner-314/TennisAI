@@ -173,8 +173,10 @@ def correct_hybrik_mesh(
     video_file: str,
     lines_file: str,
     out_dir: str,
+    cropped_json_file: str,
     save_video: bool = False,
 ):
+    filename = os.path.basename(video_file).split(".")[0]
     # use first frame
     frame = 0
     with open(processed_mesh_file, "rb") as f:
@@ -224,7 +226,7 @@ def correct_hybrik_mesh(
         right_ankle = (frame_pose["x16"], frame_pose["y16"])
 
         # correct the pose locations by accounting for cropped video dimensions
-        with open(f"../data/cropped_clips/{filename}.json", "r") as f:
+        with open(cropped_json_file, "r") as f:
             crop = json.load(f)
         crop = crop[frame]
         if crop["frame"] != frame:

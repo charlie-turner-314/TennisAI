@@ -26,7 +26,7 @@ def detect_pose(video, out_dir, save_video=False, device="cpu"):
 
     if save_video:
         writer = cv2.VideoWriter(
-            os.path.join(out_dir, f"{os.path.basename(video)}.mp4"),
+            os.path.join(out_dir, os.path.basename(video)),
             cv2.VideoWriter_fourcc(*"mp4v"),
             fps,
             (video_width, video_height),
