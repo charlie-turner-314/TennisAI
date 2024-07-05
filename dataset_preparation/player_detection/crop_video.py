@@ -33,6 +33,8 @@ def crop_video(filename, position, bbox_w, bbox_h, out_dir) -> "tuple[bool, str]
         if frame is None:
             break
 
+        if idx >= len(position):
+            break
         x1, y1, x2, y2 = position[idx]  # Original (detected) Bounding box
         if (
             np.sum([x1, y1, x2, y2]) == 0

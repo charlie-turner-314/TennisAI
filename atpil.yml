@@ -30,3 +30,12 @@ dependencies:
       - setuptools==69.5.1
       - cython==0.29.37
       - vtk==9.3.1
+      - gym
+      - vtk==9.3.1
+      - rl-games==1.1.4
+      - pyvista==0.34.2
+      - pyglet==1.5.27
+      - tqdm
+      - gym
+      - lxml
+      - numpy-stl

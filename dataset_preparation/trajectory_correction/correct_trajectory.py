@@ -180,14 +180,16 @@ def correct_hybrik_mesh(
     # use first frame
     frame = 0
     with open(processed_mesh_file, "rb") as f:
-        mesh = joblib.load(f)["00"]
-    # Mesh has: "00" : {root_orient, trans, pose_aa, beta, joints2d}
+        mesh = joblib.load(f)
+        mesh = mesh[list(mesh.keys())[0]]
+    # Mesh has: "filename" : {root_orient, trans, pose_aa, beta, joints2d}
 
     # load the 2D pose from data/pose_estimations
     with open(pose_file, "r") as f:
         pose = json.load(f)
 
     trans = mesh["trans"]
+    root_orient = mesh["pose_aa"][:, :3]
     # for each frame, compute the court coordinates of the ankle center -> change the x and y of trans to that
     # Overlay the trans coordinates on each frame of the video and save as a new video
 
@@ -263,6 +265,11 @@ def correct_hybrik_mesh(
         frame_trans[:2] = [court_x, court_y]
         trans[frame] = frame_trans
 
+        # correct root orientation using rvec
+        # TODO: Not sure how this works when the player has already been rotated in process_hybrik_data.py
+        # R = cv2.Rodrigues(rvec)[0]  # rotation matrix
+        # root_orient[frame] = R @ root_orient[frame]
+
         if save_video:
             # overlay the text onto the image
             text = f"({frame_trans[0]:.2}, {frame_trans[1]:.2}, {frame_trans[2]:.2})"
@@ -280,6 +287,7 @@ def correct_hybrik_mesh(
 
     # save the mesh back to the file
     mesh["trans"] = trans
+    # mesh["pose_aa"][:, :3] = root_orient
     mesh = {"00": mesh}
     mesh_file_out = os.path.join(out_dir, os.path.basename(processed_mesh_file))
     with open(mesh_file_out, "wb") as f:

@@ -1,5 +1,4 @@
 #!/bin/bash
-
 source activate base
 
 # Create the conda environment
@@ -16,6 +15,4 @@ cd ../../..
 
 # Install vid2player3d stuff
 cd Training/vid2player3d
-./install.sh
-pip install lxml joblib numpy-stl
 pip install -U 'mujoco-py<2.2,>=2.1'

@@ -152,7 +152,11 @@ for video_name in all_videos:
     # step 1: Convert the video to an avi with ffmpeg
     infile = video_path
     avi_file = os.path.join(aux_dir, "avi", "video.avi")
-    lines_file = os.path.join(aux_dir, "lines", f"{video_name}.txt")
+
+    # Each video should have {point}_{hit}.mp4
+    # one lines file per point
+    point = video_name.split("_")[0]
+    lines_file = os.path.join(aux_dir, "lines", f"{point}.txt")
 
     if SKIP_EXISTING and os.path.exists(lines_file):
         print(
@@ -177,39 +181,62 @@ for video_name in all_videos:
     # ======================
     # Process HybrIK Data (Rotate to global frame)
     # ======================
+    processed_check_file = os.path.join(
+        aux_dir, "pose_3d", "processed", f"{video_name}.pkl"
+    )
     hybrik_file = os.path.abspath(
         os.path.join(aux_dir, "pose_3d", f"res_{video_name}.pk")
     )
     output_file = os.path.abspath(
         os.path.join(aux_dir, "pose_3d", "processed", f"{video_name}.pkl")
     )
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    os.chdir("Training/vid2player3d")
-    process_hybrik(input_file=hybrik_file, output_file=output_file)
-    os.chdir("../..")
+    if SKIP_EXISTING and os.path.exists(processed_check_file):
+        print(
+            COLORS.GREEN
+            + f"{processed_check_file} already exists... Skipping Hybrik processing"
+            + COLORS.ENDC
+        )
+        num_processed += 1
+    else:
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        os.chdir("Training/vid2player3d")
+        process_hybrik(input_file=hybrik_file, output_file=output_file)
+        os.chdir("../..")
     # ======================
     # Convert root position and orientation to court coordinates
     # ======================
-    os.makedirs(os.path.join(aux_dir, "pose", "corrected"), exist_ok=True)
-    correct_hybrik_mesh(
-        processed_mesh_file=output_file,
-        pose_file=os.path.join(aux_dir, "pose", f"{video_name}.json"),
-        video_file=video_path,
-        lines_file=lines_file,
-        out_dir=os.path.join(aux_dir, "pose", "corrected"),
-        cropped_json_file=os.path.join(aux_dir, "pose", f"{video_name}.json"),
-        save_video=True,
+    corrected_check_file = os.path.join(
+        aux_dir, "pose", "corrected", f"{video_name}.pkl"
     )
+    if SKIP_EXISTING and os.path.exists(corrected_check_file):
+        print(
+            COLORS.GREEN
+            + f"{corrected_check_file} already exists... Skipping trajectory correction"
+            + COLORS.ENDC
+        )
+    else:
+        os.makedirs(os.path.join(aux_dir, "pose", "corrected"), exist_ok=True)
+        correct_hybrik_mesh(
+            processed_mesh_file=output_file,
+            pose_file=os.path.join(aux_dir, "pose", f"{video_name}.json"),
+            video_file=video_path,
+            lines_file=lines_file,
+            out_dir=os.path.join(aux_dir, "pose", "corrected"),
+            cropped_json_file=os.path.join(aux_dir, "cropped", f"{video_name}.json"),
+            save_video=True,
+        )
     num_processed += 1
-    break
 
 # **********************
 # Prepare Master PKL File
 # **********************
 os.makedirs(args.output_dir, exist_ok=True)
 results = process_files(os.path.join(aux_dir, "pose", "corrected"))
+num_processed = len(results.keys())
 save_results(results, os.path.join(args.output_dir, "processed_data.pkl"))
-print(COLORS.GREEN + f"Saved processed data to: {args.output_dir}" + COLORS.ENDC)
+print(
+    COLORS.GREEN + f"Saved {num_processed} motions to: {args.output_dir}" + COLORS.ENDC
+)
 
 # **********************
 # Collate Into motion_lib dataset

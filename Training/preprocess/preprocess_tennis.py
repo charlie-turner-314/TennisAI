@@ -35,6 +35,7 @@ def process_files(directory):
                         num_success = num_success + 1
 
     print(f"Found {num_success} motions!")
+    print(result)
     return result
 
 
