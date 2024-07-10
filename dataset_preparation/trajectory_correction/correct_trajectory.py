@@ -181,7 +181,8 @@ def correct_hybrik_mesh(
     frame = 0
     with open(processed_mesh_file, "rb") as f:
         mesh = joblib.load(f)
-        mesh = mesh[list(mesh.keys())[0]]
+        key = list(mesh.keys())[0]
+        mesh = mesh[key]
     # Mesh has: "filename" : {root_orient, trans, pose_aa, beta, joints2d}
 
     # load the 2D pose from data/pose_estimations
@@ -288,7 +289,7 @@ def correct_hybrik_mesh(
     # save the mesh back to the file
     mesh["trans"] = trans
     # mesh["pose_aa"][:, :3] = root_orient
-    mesh = {"00": mesh}
+    mesh = {key: mesh}
     mesh_file_out = os.path.join(out_dir, os.path.basename(processed_mesh_file))
     with open(mesh_file_out, "wb") as f:
         joblib.dump(mesh, f)
