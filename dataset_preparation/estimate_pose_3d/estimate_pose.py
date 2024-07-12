@@ -143,8 +143,11 @@ def estimate_pose_3d(video_name, out_dir, save_video=False, device="cuda:0"):
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
-    if not os.path.exists(os.path.join(out_dir, "raw_images")):
-        os.makedirs(os.path.join(out_dir, "raw_images"))
+    if os.path.exists(os.path.join(out_dir, "raw_images")):
+        for file in os.listdir(os.path.join(out_dir, "raw_images")):
+            fp = os.path.join(out_dir, "raw_images", file)
+            os.remove(fp)
+    os.makedirs(os.path.join(out_dir, "raw_images"), exist_ok=True)
 
     _, info, _ = get_video_info(video_name)
     video_basename = os.path.basename(video_name).split(".")[0]
