@@ -7,4 +7,4 @@
 	url = https://github.com/gchlebus/tennis-court-detection
 [submodule "dataset_preparation/spot"]
 	path = dataset_preparation/spot
-	url = https://github.com/jhong93/spot
+	url = https://github.com/charlie-turner-314/spot
