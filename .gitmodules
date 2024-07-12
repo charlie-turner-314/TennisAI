@@ -5,3 +5,6 @@
 [submodule "dataset_preparation/court_detection/tennis-court-detection"]
 	path = dataset_preparation/court_detection/tennis-court-detection
 	url = https://github.com/gchlebus/tennis-court-detection
+[submodule "dataset_preparation/spot"]
+	path = dataset_preparation/spot
+	url = https://github.com/jhong93/spot

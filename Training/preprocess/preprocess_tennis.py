@@ -26,6 +26,20 @@ def process_files(directory):
                         key in data[m].keys()
                         for key in ["trans", "beta", "gender", "pose_aa"]
                     ):
+                        # linear interpolate any nans column wise in trans. e.g [[1, 5, 5], [nan, 2, 4], [2, 7, 6]] -> [[1, 5, 5], [1.5, 2, 4], [2, 7, 6]]
+                        for i in range(3):
+                            nan_idx = np.isnan(data[m]["trans"][:, i])
+                            if np.any(nan_idx):
+                                print("Found some nans, interpolating")
+                                vec = data[m]["trans"][
+                                    :, i
+                                ]  # get the column (shape will be (n, 1))
+                                # use np.interp to linearly interpolate the nans
+                                x = lambda z: z.nonzero()[0]
+                                data[m]["trans"][:, i][nan_idx] = np.interp(
+                                    x(nan_idx), x(~nan_idx), vec[~nan_idx]
+                                )
+
                         result[f"file_{m}"] = {
                             "trans": data[m]["trans"],
                             "beta": data[m]["beta"],
@@ -35,7 +49,6 @@ def process_files(directory):
                         num_success = num_success + 1
 
     print(f"Found {num_success} motions!")
-    print(result)
     return result
 
 

@@ -21,7 +21,6 @@ def detect_player(filepath: str, player: str) -> "tuple[tuple[int, int], np.ndar
         int(cap.get(cv2.CAP_PROP_FPS)),
     )
     num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    print("Video dimensions:", video_width, video_height, fps, num_frames)
 
     writer = cv2.VideoWriter(
         "output.mp4",

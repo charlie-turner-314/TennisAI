@@ -5,6 +5,7 @@ import os
 import cv2
 import json
 import time
+import joblib
 from dataset_preparation.player_detection.player_detect import detect_player
 from dataset_preparation.player_detection.crop_video import crop_video
 from dataset_preparation.estimate_pose.estimate_pose import detect_pose
@@ -13,6 +14,7 @@ from Training.preprocess.preprocess_tennis import process_files, save_results
 from dataset_preparation.trajectory_correction.correct_trajectory import (
     correct_hybrik_mesh,
 )
+from dataset_preparation.spot.infer_tennis import infer_video
 
 SKIP_EXISTING = True
 DEVICE = "cuda:0"
@@ -23,6 +25,73 @@ class COLORS:
     GREEN = "\033[92m"
     RED = "\033[91m"
     ENDC = "\033[0m"
+
+
+def add_to_manifest(
+    video_name: str, num_frames: int, detected_events: dict, beta: np.ndarray
+):
+    """
+    Add the sequence to the manifest.json file
+    """
+    # params
+    point_id = int(video_name.split("_")[0].split("p")[1])
+    hit_id = int(video_name.split("_")[1].split("h")[1])
+    manifest = []
+    if os.path.exists("manifest.json"):
+        with open("manifest.json", "r") as f:
+            manifest = json.load(f)
+    # NOTE: just using first video here
+    if len(manifest) == 0:
+        video = {
+            "name": "kyrgios_med_2022",
+            "gender": "mens",
+            "background": "usopen",
+            "is_orig": True,
+            "sequences": {"fg": []},
+            "points_annotation": [],
+        }
+        manifest.append(video)
+    else:
+        video = manifest[0]
+    keyframe_offset = 0  # offset to add to keyframe fid
+    if len(video["sequences"]["fg"]) > 0:
+        latest_point = video["sequences"]["fg"][-1]["point_idx"]
+        if latest_point == point_id:
+            keyframe_offset = (
+                video["sequences"]["fg"][-1]["base"]
+                + video["sequences"]["fg"][-1]["length"]
+            )
+    # ======= KEYFRAME/s =======
+    # Ensure a keyframe for the point exists
+    for i in range(point_id + 1):
+        if len(video["points_annotation"]) < i + 1:
+            video["points_annotation"].append({"point_idx": i, "keyframes": []})
+    for event in detected_events["events"]:
+        if event["label"] == "near_court_swing":
+            keyframe = {"fid": int(event["frame"]) + keyframe_offset, "fg": True}
+            print(event, keyframe)
+        elif event["label"] == "far_court_swing":
+            keyframe = {"fid": int(event["frame"]) + keyframe_offset, "fg": False}
+        else:
+            continue
+        video["points_annotation"][point_id]["keyframes"].append(keyframe)
+    # ======== SEQUENCE ========
+    sequence = {
+        "clip": video_name,
+        "point_idx": point_id,
+        "start": 0,
+        "base": keyframe_offset,
+        "length": num_frames,
+        # STUFF THAT COULD BE CHANGED
+        "handedness": "right",
+        "player": "Kyrgios",
+        "beta": beta.tolist(),
+    }
+    video["sequences"]["fg"].append(sequence)
+    # ======== SAVE ========
+    manifest = [video]
+    with open("manifest.json", "w") as f:
+        json.dump(manifest, f)
 
 
 parser = argparse.ArgumentParser()
@@ -61,6 +130,12 @@ time.sleep(2)
 
 all_videos = os.listdir(args.input_dir)
 all_videos = [v for v in all_videos if v.endswith(".mp4")]
+all_videos.sort(
+    key=lambda x: int(x.split("_")[0].split("p")[1]) * 100
+    + int(x.split("_")[1].split("h")[1].split(".")[0])
+)
+
+
 aux_dir = os.path.join(args.input_dir, "..", "aux")
 num_processed = 0
 
@@ -68,6 +143,20 @@ for video_name in all_videos:
     video_path = os.path.join(args.input_dir, video_name)
     video_name = video_name.split(".")[0]
     print(COLORS.BLUE + f"Processing video: {video_path}" + COLORS.ENDC)
+    # ======================
+    # Set FPS
+    # ======================
+    # check fps
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    print("Original FPS", fps)
+    if fps > 30:
+        out_file = os.path.join(os.path.dirname(video_path), "temp.mp4")
+        os.system(
+            f"ffmpeg -i {video_path} -r 30 -c:v libx264 -crf 18 -preset slow {out_file} -loglevel quiet"
+        )
+        os.rename(out_file, video_path)
+        print("Resampled to 30fps")
     # ======================
     # Crop To Player
     # ======================
@@ -225,6 +314,23 @@ for video_name in all_videos:
             cropped_json_file=os.path.join(aux_dir, "cropped", f"{video_name}.json"),
             save_video=True,
         )
+
+    # ======================
+    # Add to manifest.json by detecting the point and hit and keyframes
+    # ======================
+    detected_hits, num_frames = infer_video(video_path)
+    beta_file = os.path.abspath(
+        os.path.join(aux_dir, "pose_3d", "processed", f"{video_name}.pkl")
+    )
+    with open(beta_file, "rb") as f:
+        beta = joblib.load(f)
+    beta = beta["res_" + video_name]["beta"]
+    add_to_manifest(
+        video_name=video_name,
+        num_frames=num_frames,
+        detected_events=detected_hits,
+        beta=beta,
+    )
     num_processed += 1
 
 # **********************
@@ -260,8 +366,3 @@ if res != 0:
 print(COLORS.GREEN + f"Saved motion_lib data to: {args.mlib_dir}" + COLORS.ENDC)
 
 print("Done!")
-
-# **********************
-# Manifest.json File ?
-# **********************
-pass

@@ -225,8 +225,15 @@ def correct_hybrik_mesh(
         if frame_pose["frame"] != frame:
             raise ValueError("Frame number does not match")
 
-        left_ankle = (frame_pose["x15"], frame_pose["y15"])
-        right_ankle = (frame_pose["x16"], frame_pose["y16"])
+        left_ankle = (frame_pose.get("x15"), frame_pose.get("y15"))
+        right_ankle = (frame_pose.get("x16"), frame_pose.get("y16"))
+        if left_ankle is None:
+            left_ankle = right_ankle
+        if right_ankle is None:
+            right_ankle = left_ankle
+
+        if left_ankle is None or right_ankle is None:
+            raise ValueError("Ankle location not found")
 
         # correct the pose locations by accounting for cropped video dimensions
         with open(cropped_json_file, "r") as f:
@@ -262,6 +269,8 @@ def correct_hybrik_mesh(
 
         last_coords.append((court_x, court_y))
 
+        if court_x is None or court_y is None:
+            raise ValueError("Court coordinates not found for frame", frame)
         # update trans
         frame_trans[:2] = [court_x, court_y]
         trans[frame] = frame_trans
