@@ -34,6 +34,7 @@ def add_to_manifest(
     Add the sequence to the manifest.json file
     """
     # params
+
     point_id = int(video_name.split("_")[0].split("p")[1])
     hit_id = int(video_name.split("_")[1].split("h")[1])
     manifest = []
@@ -54,13 +55,19 @@ def add_to_manifest(
     else:
         video = manifest[0]
     keyframe_offset = 0  # offset to add to keyframe fid
+    base = 0
+    start = 0
     if len(video["sequences"]["fg"]) > 0:
+        base = video["sequences"]["fg"][-1]["base"] + video["sequences"]["fg"][-1]["length"]
         latest_point = video["sequences"]["fg"][-1]["point_idx"]
         if latest_point == point_id:
             keyframe_offset = (
                 video["sequences"]["fg"][-1]["base"]
                 + video["sequences"]["fg"][-1]["length"]
             )
+            start = video["sequences"]["fg"][-1]["start"]
+        else:
+            start = video["sequences"]["fg"][-1]["start"] + video["sequences"]["fg"][-1]["base"] + video["sequences"]["fg"][-1]["length"]
     # ======= KEYFRAME/s =======
     # Ensure a keyframe for the point exists
     for i in range(point_id + 1):
@@ -79,8 +86,8 @@ def add_to_manifest(
     sequence = {
         "clip": video_name,
         "point_idx": point_id,
-        "start": 0,
-        "base": keyframe_offset,
+        "start": start,
+        "base": base,
         "length": num_frames,
         # STUFF THAT COULD BE CHANGED
         "handedness": "right",
@@ -101,7 +108,7 @@ parser.description = "Prepare tennis dataset for training."
 parser.add_argument(
     "--input_dir",
     type=str,
-    default="data/full_clips",
+    default="/home/charlie/Documents/Kyrgios_Medvedev_2022",
     help="Directory with mp4 tennis clips from broadcast angle. Each video should be a single shot sequence.",
     dest="input_dir",
 )
@@ -109,7 +116,7 @@ parser.add_argument(
 parser.add_argument(
     "--output_dir",
     type=str,
-    default="data/processed",
+    default="/home/charlie/Documents/Kyrgios_Medvedev_2022/processed",
     help="Directory to save processed pkl dump.",
     dest="output_dir",
 )

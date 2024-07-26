@@ -8,6 +8,20 @@ import joblib
 import numpy as np
 import argparse
 
+def linterp(arr):
+    """
+    linear interpolate any nans in each column of the array given
+    """
+    for col in range(arr.shape[1]):
+        nan_idx = np.isnan(arr[:, col])
+        if np.any(nan_idx):
+            vec = arr[:, col]
+            x = lambda z: z.nonzero()[0]
+            arr[:, col][nan_idx] = np.interp(
+                x(nan_idx), x(~nan_idx), vec[~nan_idx]
+            )
+    return arr
+
 
 def process_files(directory):
     """

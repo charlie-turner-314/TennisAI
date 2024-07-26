@@ -48,6 +48,7 @@ def main():
 
         start = sum(lengths[:i])
         end = sum(lengths[:i+1]) 
+        
         joint_pos[start:end] = joint_pos_in[:lengths[i]]
         joint_rot[start:end] = joint_rot_in[:lengths[i]]
         joint_rotmat[start:end] = joint_rotmat_in[:lengths[i]]
