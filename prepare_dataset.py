@@ -67,18 +67,20 @@ def add_to_manifest(
             )
             start = video["sequences"]["fg"][-1]["start"]
         else:
-            start = video["sequences"]["fg"][-1]["start"] + video["sequences"]["fg"][-1]["base"] + video["sequences"]["fg"][-1]["length"]
+            start = video["sequences"]["fg"][-1]["base"] + video["sequences"]["fg"][-1]["length"]
+            keyframe_offset = start 
     # ======= KEYFRAME/s =======
     # Ensure a keyframe for the point exists
     for i in range(point_id + 1):
         if len(video["points_annotation"]) < i + 1:
             video["points_annotation"].append({"point_idx": i, "keyframes": []})
     for event in detected_events["events"]:
-        if event["label"] == "near_court_swing":
+        if event["label"] == "near_court_swing" or event["label"] == "near_court_serve":
             keyframe = {"fid": int(event["frame"]) + keyframe_offset, "fg": True}
             print(event, keyframe)
-        elif event["label"] == "far_court_swing":
+        elif event["label"] == "far_court_swing" or event['label'] == "far_court_serve":
             keyframe = {"fid": int(event["frame"]) + keyframe_offset, "fg": False}
+            print(event, keyframe)
         else:
             continue
         video["points_annotation"][point_id]["keyframes"].append(keyframe)

@@ -33,6 +33,11 @@ def main():
     joint_quat = np.zeros((sum(lengths), 24 * 4))
     print(joint_pos.shape)
 
+    longest = max(lengths)
+    longest_idx = lengths.index(longest)
+    lengths[longest_idx] -= 1
+
+
     for i, seq in enumerate(seqs):
         print(seq['clip'])
         prefix = "file_res_" + seq['clip']
