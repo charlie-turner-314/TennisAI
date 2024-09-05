@@ -4,7 +4,9 @@ import os
 import json
 
 
-def crop_video(filename, position, bbox_w, bbox_h, out_dir) -> "tuple[bool, str]":
+def crop_video(
+    filename, position, bbox_w, bbox_h, out_dir, start_frame, end_frame
+) -> "tuple[bool, str]":
     cap = cv2.VideoCapture(filename)
     if not cap.isOpened():
         print(f"Error opening video {filename}")
@@ -36,6 +38,10 @@ def crop_video(filename, position, bbox_w, bbox_h, out_dir) -> "tuple[bool, str]
         if idx >= len(position):
             break
         x1, y1, x2, y2 = position[idx]  # Original (detected) Bounding box
+
+        if idx < start_frame or idx > end_frame:
+            idx += 1
+            continue
         if (
             np.sum([x1, y1, x2, y2]) == 0
         ):  # TODO: Currently skipping if no person detected in frame, could interpolate instead

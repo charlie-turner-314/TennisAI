@@ -22,7 +22,7 @@ from tqdm import tqdm
 from hybrik.models import builder
 from hybrik.utils.config import update_config
 from hybrik.utils.presets import SimpleTransform3DSMPLCam
-from hybrik.utils.vis import get_max_iou_box, get_one_box, vis_2d
+# from hybrik.utils.vis import get_max_iou_box, get_one_box, vis_2d
 
 det_transform = T.Compose([T.ToTensor()])
 
