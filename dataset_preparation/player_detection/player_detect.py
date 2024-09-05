@@ -8,7 +8,9 @@ PERSON_CLASS = 0  # YOLO class for person
 PADDING = 0.05  # Padding for the bounding box
 
 
-def detect_player(filepath: str, player: str) -> "tuple[tuple[int, int], np.ndarray]":
+def detect_player(
+    filepath: str, player: str
+) -> "tuple[tuple[int, int], np.ndarray, tuple[int, int]]":
     """
     player: str. One of ["fg", "bg"]
     """
@@ -178,19 +180,23 @@ def detect_player(filepath: str, player: str) -> "tuple[tuple[int, int], np.ndar
     print(len(missing_ids), "frames missing")
 
     # if frames are missing at the end, just remove them
+    start_frame = 0
+    end_frame = num_frames
     removed_missing = False
     while np.all(our_person[-1] == 0):
         our_person.pop()
+        end_frame -= 1
     if removed_missing:
         print("Removed missing end frames, new length: ", len(our_person))
 
     while np.all(our_person[0] == 0):
         our_person.pop(0)
+        start_frame += 1
     if removed_missing:
         print("Removed missing start frames, new length: ", len(our_person))
 
     # update missing_ids
-    missing_ids = [i for i in len(our_person) if np.all(our_person[i] == 0)]
+    missing_ids = [i for i in range(len(our_person)) if np.all(our_person[i] == 0)]
 
     # make sure all elements are np arrays
     our_person = np.array(our_person)
@@ -234,4 +240,4 @@ def detect_player(filepath: str, player: str) -> "tuple[tuple[int, int], np.ndar
         ]
     )
 
-    return (bbox_max_w, bbox_max_h), our_person
+    return (bbox_max_w, bbox_max_h), our_person, (start_frame, end_frame)

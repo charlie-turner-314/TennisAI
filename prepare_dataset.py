@@ -176,10 +176,12 @@ for video_name in all_videos:
         )
         cropped_video_path = crop_check_file
     else:
-        (bbox_w, bbox_h), positions = detect_player(filepath=video_path, player="fg")
+        (bbox_w, bbox_h), positions, (start_frame, end_frame) = detect_player(
+            filepath=video_path, player="fg"
+        )
         # Crop video to player bounding box
         success, cropped_video_path = crop_video(
-            video_path, positions, bbox_w, bbox_h, os.path.join(aux_dir, "cropped")
+            video_path, positions, bbox_w, bbox_h, os.path.join(aux_dir, "cropped"), start_frame, end_frame
         )
         if not success:
             print(f"Failed to crop video {video_path}.")
