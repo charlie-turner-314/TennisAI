@@ -35,8 +35,6 @@ def add_to_manifest(
     """
     # params
 
-    point_id = int(video_name.split("_")[0].split("p")[1])
-    hit_id = int(video_name.split("_")[1].split("h")[1])
     manifest = []
     if os.path.exists("manifest.json"):
         with open("manifest.json", "r") as f:
@@ -58,27 +56,29 @@ def add_to_manifest(
     base = 0
     start = 0
     if len(video["sequences"]["fg"]) > 0:
-        base = video["sequences"]["fg"][-1]["base"] + video["sequences"]["fg"][-1]["length"]
-        latest_point = video["sequences"]["fg"][-1]["point_idx"]
-        if latest_point == point_id:
-            keyframe_offset = (
-                video["sequences"]["fg"][-1]["base"]
-                + video["sequences"]["fg"][-1]["length"]
-            )
-            start = video["sequences"]["fg"][-1]["start"]
-        else:
-            start = video["sequences"]["fg"][-1]["base"] + video["sequences"]["fg"][-1]["length"]
-            keyframe_offset = start 
+        base = (
+            video["sequences"]["fg"][-1]["base"]
+            + video["sequences"]["fg"][-1]["length"]
+        )
+        start = (
+            video["sequences"]["fg"][-1]["base"]
+            + video["sequences"]["fg"][-1]["length"]
+        )
+        keyframe_offset = start
     # ======= KEYFRAME/s =======
     # Ensure a keyframe for the point exists
-    for i in range(point_id + 1):
-        if len(video["points_annotation"]) < i + 1:
-            video["points_annotation"].append({"point_idx": i, "keyframes": []})
+    if len(video["points_annotation"]) == 0:
+        video["points_annotation"].append({"point_idx": 0, "keyframes": []})
+        point_id = 0
+    else:
+        point_id = video["points_annotation"][-1]["point_idx"] + 1
+
+    video["points_annotation"].append({"point_idx": point_id, "keyframes": []})
     for event in detected_events["events"]:
         if event["label"] == "near_court_swing" or event["label"] == "near_court_serve":
             keyframe = {"fid": int(event["frame"]) + keyframe_offset, "fg": True}
             print(event, keyframe)
-        elif event["label"] == "far_court_swing" or event['label'] == "far_court_serve":
+        elif event["label"] == "far_court_swing" or event["label"] == "far_court_serve":
             keyframe = {"fid": int(event["frame"]) + keyframe_offset, "fg": False}
             print(event, keyframe)
         else:
@@ -126,7 +126,7 @@ parser.add_argument(
 parser.add_argument(
     "--motion_lib_dir",
     type=str,
-    default="Training/vid2player3d/data/motion_lib/tennis",
+    default="home/turner30/ATPIL/Training/vid2player3d/data/motion_lib/tennis",
     help="Directory to output motion_lib dataset.",
     dest="mlib_dir",
 )
@@ -139,10 +139,7 @@ time.sleep(2)
 
 all_videos = os.listdir(args.input_dir)
 all_videos = [v for v in all_videos if v.endswith(".mp4")]
-all_videos.sort(
-    key=lambda x: int(x.split("_")[0].split("p")[1]) * 100
-    + int(x.split("_")[1].split("h")[1].split(".")[0])
-)
+all_videos.sort()
 
 
 aux_dir = os.path.join(args.input_dir, "..", "aux")
@@ -253,7 +250,8 @@ for video_name in all_videos:
 
     # Each video should have {point}_{hit}.mp4
     # one lines file per point
-    point = video_name.split("_")[0]
+    # point = video_name.split("_")[0]
+    point = video_name  # .split("_")[0]
     lines_file = os.path.join(aux_dir, "lines", f"{point}.txt")
 
     if SKIP_EXISTING and os.path.exists(lines_file):
