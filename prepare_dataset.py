@@ -110,7 +110,7 @@ parser.description = "Prepare tennis dataset for training."
 parser.add_argument(
     "--input_dir",
     type=str,
-    default="/home/turner30/Projects/Tennis/Clips",
+    default="/home/charlie/Documents/Clips",
     help="Directory with mp4 tennis clips from broadcast angle. Each video should be a single shot sequence.",
     dest="input_dir",
 )
@@ -118,7 +118,7 @@ parser.add_argument(
 parser.add_argument(
     "--output_dir",
     type=str,
-    default="/home/turner30/Pojects/Tennis/Clips/processed",
+    default="/home/charlie/Documents/Clips/processed",
     help="Directory to save processed pkl dump.",
     dest="output_dir",
 )
@@ -126,7 +126,7 @@ parser.add_argument(
 parser.add_argument(
     "--motion_lib_dir",
     type=str,
-    default="home/turner30/ATPIL/Training/vid2player3d/data/motion_lib/tennis",
+    default="Training/vid2player3d/data/motion_lib/tennis",
     help="Directory to output motion_lib dataset.",
     dest="mlib_dir",
 )

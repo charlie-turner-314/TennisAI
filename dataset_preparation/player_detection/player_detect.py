@@ -190,7 +190,7 @@ def detect_player(filepath: str, player: str) -> "tuple[tuple[int, int], np.ndar
         print("Removed missing start frames, new length: ", len(our_person))
 
     # update missing_ids
-    missing_ids = [i for i in len(our_person) if np.all(our_person[i] == 0)]
+    missing_ids = [i for i in range(len(our_person)) if np.all(our_person[i] == 0)]
 
     # make sure all elements are np arrays
     our_person = np.array(our_person)
