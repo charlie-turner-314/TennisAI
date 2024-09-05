@@ -110,7 +110,7 @@ parser.description = "Prepare tennis dataset for training."
 parser.add_argument(
     "--input_dir",
     type=str,
-    default="/home/charlie/Documents/Kyrgios_Medvedev_2022",
+    default="/home/turner30/Projects/Tennis/Clips",
     help="Directory with mp4 tennis clips from broadcast angle. Each video should be a single shot sequence.",
     dest="input_dir",
 )
@@ -118,7 +118,7 @@ parser.add_argument(
 parser.add_argument(
     "--output_dir",
     type=str,
-    default="/home/charlie/Documents/Kyrgios_Medvedev_2022/processed",
+    default="/home/turner30/Pojects/Tennis/Clips/processed",
     help="Directory to save processed pkl dump.",
     dest="output_dir",
 )
