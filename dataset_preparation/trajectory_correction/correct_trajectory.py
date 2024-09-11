@@ -213,9 +213,12 @@ def correct_hybrik_mesh(
     frame = 0
     last_coords = []
     imputed = 0
+    last_pose = None
     while True:
         ret, img = vid.read()
         if not ret:
+            break
+        if frame >= len(trans):
             break
         # Get the trans of this frame
         frame_trans = trans[frame]
@@ -227,20 +230,35 @@ def correct_hybrik_mesh(
 
         left_ankle = (frame_pose.get("x15"), frame_pose.get("y15"))
         right_ankle = (frame_pose.get("x16"), frame_pose.get("y16"))
-        if left_ankle is None:
+        if left_ankle is None or left_ankle[0] == None:
             left_ankle = right_ankle
-        if right_ankle is None:
+        if right_ankle is None or right_ankle[0] == None:
             right_ankle = left_ankle
+        
+        frame_pose.update({"x15": left_ankle[0], "y15": left_ankle[1], "x16": right_ankle[0], "y16": right_ankle[1]})
 
-        if left_ankle is None or right_ankle is None:
-            raise ValueError("Ankle location not found")
+        if left_ankle is None or right_ankle is None or left_ankle[0] is None or right_ankle[0] is None:
+            # use the last frame's pose
+            if last_pose is not None:
+                left_ankle = (last_pose.get("x15"), last_pose.get("y15"))
+                right_ankle = (last_pose.get("x16"), last_pose.get("y16"))
+            else:
+                raise ValueError("Ankle location not found")
+        
+        last_pose = frame_pose
 
         # correct the pose locations by accounting for cropped video dimensions
         with open(cropped_json_file, "r") as f:
             crop = json.load(f)
         crop = crop[frame]
-        if crop["frame"] != frame:
-            raise ValueError("Frame number does not match")
+        # if crop["frame"] != frame:
+        #     if frame == 0:
+        #         # first frame
+        #         frame = crop[0]
+        #     else:
+        #         raise ValueError("Frame number does not match", frame, crop["frame"])
+
+        # print(left_ankle, crop)
         left_ankle = (left_ankle[0] + crop["x1"], left_ankle[1] + crop["y1"])
         right_ankle = (right_ankle[0] + crop["x1"], right_ankle[1] + crop["y1"])
 

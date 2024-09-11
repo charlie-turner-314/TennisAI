@@ -11,5 +11,6 @@ class SelfPlayConfig(DirectRLEnvConfig):
     # Scene
     scene: InteractiveSceneCfg = None
     # Env
-    decimation = 
+    decimation = 0
+    episode_length_s = 0
     # Task-specific

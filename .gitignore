@@ -3,3 +3,5 @@
 data
 .DS_Store
 frame_dir
+isaacgym.tar.gz
+tennis_rl*

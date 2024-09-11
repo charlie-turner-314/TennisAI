@@ -35,7 +35,6 @@ def main():
 
     longest = max(lengths)
     longest_idx = lengths.index(longest)
-    lengths[longest_idx] -= 1
 
 
     for i, seq in enumerate(seqs):
@@ -51,11 +50,14 @@ def main():
         joint_rotmat_in = np.load(joint_rotmat_path)
         joint_quat_in = np.load(joint_quat_path) 
 
+
         start = sum(lengths[:i])
         end = sum(lengths[:i+1]) 
+
+        length = min(len(joint_pos_in), lengths[i])
         
-        joint_pos[start:end] = joint_pos_in[:lengths[i]]
-        joint_rot[start:end] = joint_rot_in[:lengths[i]]
+        joint_pos[start:end] = joint_pos_in[:length] 
+        joint_rot[start:end] = joint_rot_in[:length]
         joint_rotmat[start:end] = joint_rotmat_in[:lengths[i]]
         joint_quat[start:end] = joint_quat_in[:lengths[i]]
 
@@ -65,6 +67,7 @@ def main():
     print(joint_rot.shape)
     print(joint_rotmat.shape)
     print(joint_quat.shape)
+
 
     np.save(os.path.join(args.dir,'joint_pos.npy'), joint_pos)
     np.save(os.path.join(args.dir,'joint_rot.npy'), joint_rot)

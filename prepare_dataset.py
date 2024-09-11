@@ -1,6 +1,7 @@
 import argparse
 
 import numpy as np
+import pandas as pd
 import os
 import cv2
 import json
@@ -14,7 +15,9 @@ from Training.preprocess.preprocess_tennis import process_files, save_results
 from dataset_preparation.trajectory_correction.correct_trajectory import (
     correct_hybrik_mesh,
 )
-from dataset_preparation.spot.infer_tennis import infer_video
+from dataset_preparation.spot.infer_tennis import infer_frame_dir, extract_frames_with_progress
+from dataset_preparation.spot.spot_to_csv import spot_to_csv
+from dataset_preparation.spot.analyse_spot import identify_point_sequences, filter_and_condense_sequences, extract_sequences
 
 SKIP_EXISTING = True
 DEVICE = "cuda:0"
@@ -39,19 +42,19 @@ def add_to_manifest(
     if os.path.exists("manifest.json"):
         with open("manifest.json", "r") as f:
             manifest = json.load(f)
+    vid = "_".join(video_name.split("_")[:-1])
     # NOTE: just using first video here
-    if len(manifest) == 0:
+    if not any([v["name"] == vid for v in manifest]):
         video = {
-            "name": "kyrgios_med_2022",
+            "name": vid,
             "gender": "mens",
             "background": "usopen",
             "is_orig": True,
             "sequences": {"fg": []},
             "points_annotation": [],
         }
-        manifest.append(video)
     else:
-        video = manifest[0]
+        video = [v for v in manifest if v["name"] == vid][0]
     keyframe_offset = 0  # offset to add to keyframe fid
     base = 0
     start = 0
@@ -98,7 +101,10 @@ def add_to_manifest(
     }
     video["sequences"]["fg"].append(sequence)
     # ======== SAVE ========
-    manifest = [video]
+    # replace or add video to manifest 
+    if any([v["name"] == vid for v in manifest]):
+        manifest = [v for v in manifest if v["name"] != vid]
+    manifest.append(video)
     with open("manifest.json", "w") as f:
         json.dump(manifest, f)
 
@@ -110,8 +116,8 @@ parser.description = "Prepare tennis dataset for training."
 parser.add_argument(
     "--input_dir",
     type=str,
-    default="/home/charlie/Documents/Clips",
-    help="Directory with mp4 tennis clips from broadcast angle. Each video should be a single shot sequence.",
+    default="/home/charlie/Documents/TennisMatches",
+    help="Directory with mp4 tennis matches to process.",
     dest="input_dir",
 )
 
@@ -145,7 +151,56 @@ all_videos.sort()
 aux_dir = os.path.join(args.input_dir, "..", "aux")
 num_processed = 0
 
+frame_dir = os.path.join(aux_dir, "frames")
+if not os.path.exists(frame_dir):
+    os.makedirs(frame_dir)
 for video_name in all_videos:
+    video_path = os.path.join(args.input_dir, video_name)
+    video_name = video_name.split(".")[0]
+    print(COLORS.BLUE + f"Cutting frames from: {video_path}" + COLORS.ENDC)
+    # ======================
+    # Cut frames
+    # ======================
+    if SKIP_EXISTING and os.path.exists(os.path.join(frame_dir, video_name)):
+        print(
+            COLORS.GREEN
+            + f"Frames for {video_name} already exist... Skipping frame extraction"
+            + COLORS.ENDC
+        )
+    else:
+        os.makedirs(os.path.join(frame_dir, video_name), exist_ok=True)
+        extract_frames_with_progress(video_path, frame_dir, video_name)
+# ======================
+# Run Spot
+# ======================
+events = infer_frame_dir(frame_dir)
+event_dir = os.path.join(aux_dir, "events")
+os.makedirs(event_dir, exist_ok=True)
+spot_to_csv(events, os.path.join(event_dir, "events.csv"))
+# ======================
+# Extract Clips
+# ======================
+clip_dir = os.path.join(aux_dir, "clips")
+all_events = pd.read_csv(os.path.join(event_dir, "events.csv"))
+for vid in all_events["video"].unique():
+    frame_rate = cv2.VideoCapture(os.path.join(args.input_dir, vid)).get(cv2.CAP_PROP_FPS)
+    data = all_events[all_events["video"] == vid]
+    sequences = identify_point_sequences(data)
+    sequences = filter_and_condense_sequences(sequences)
+    extract_sequences(
+        sequences,
+        video_path=os.path.join(args.input_dir, vid),
+        output_dir=clip_dir,
+        sequence_dir=os.path.join(aux_dir, "sequences"),
+        frame_rate=frame_rate,
+    )
+
+all_clips = os.listdir(clip_dir)
+all_clips = [v for v in all_clips if v.endswith(".mp4")]
+all_clips.sort()
+
+# For each little clip
+for video_name in all_clips:
     video_path = os.path.join(args.input_dir, video_name)
     video_name = video_name.split(".")[0]
     print(COLORS.BLUE + f"Processing video: {video_path}" + COLORS.ENDC)
@@ -250,11 +305,11 @@ for video_name in all_videos:
     infile = video_path
     avi_file = os.path.join(aux_dir, "avi", "video.avi")
 
-    # Each video should have {point}_{hit}.mp4
-    # one lines file per point
+    # one lines file per base video. Not super important but general spacing is good to have
+    # NOTE: a faster algorith would be able to be run for each subclip
     # point = video_name.split("_")[0]
-    point = video_name  # .split("_")[0]
-    lines_file = os.path.join(aux_dir, "lines", f"{point}.txt")
+    base_video = "_".join(video_name.split("_")[:-1])
+    lines_file = os.path.join(aux_dir, "lines", f"{base_video}.txt")
 
     if SKIP_EXISTING and os.path.exists(lines_file):
         print(
@@ -327,7 +382,14 @@ for video_name in all_videos:
     # ======================
     # Add to manifest.json by detecting the point and hit and keyframes
     # ======================
-    detected_hits, num_frames = infer_video(video_path)
+    with open(os.path.join(aux_dir, "hits", f"{video_name}.json")) as f:
+        detected_hits = json.load(f)
+    
+    # get num frames in the video with ffmpeg
+    cap = cv2.VideoCapture(video_path)
+    num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    # get beta from processed data
     beta_file = os.path.abspath(
         os.path.join(aux_dir, "pose_3d", "processed", f"{video_name}.pkl")
     )
