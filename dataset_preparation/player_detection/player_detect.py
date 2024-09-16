@@ -115,12 +115,6 @@ def detect_player(
         ids[best_id]
     ]  # bounding box in each frame for the person we want
 
-    # make sure our person has a box for first frame
-    # while np.all(person[0] == 0):
-    #     print(f"Person {ids[best_id]} doesn't have a bounding box in the first frame")
-    #     best_id += 1
-    #     person = positions[ids[best_id]]
-
     # now we have to go through each frame, and:
     # 1. See if there is a bounding box for our person
     # 2. If there is, great! If not, see if another person has a bounding box very close to the last sighting of our person

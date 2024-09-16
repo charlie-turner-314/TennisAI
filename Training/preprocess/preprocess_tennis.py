@@ -44,15 +44,14 @@ def process_files(directory):
                         for i in range(3):
                             nan_idx = np.isnan(data[m]["trans"][:, i])
                             if np.any(nan_idx):
-                                print("Found some nans, interpolating")
+                                print(f"Found {np.sum(nan_idx)} nans out of {len(nan_idx)}")
                                 vec = data[m]["trans"][
                                     :, i
                                 ]  # get the column (shape will be (n, 1))
                                 # use np.interp to linearly interpolate the nans
-                                x = lambda z: z.nonzero()[0]
-                                data[m]["trans"][:, i][nan_idx] = np.interp(
-                                    x(nan_idx), x(~nan_idx), vec[~nan_idx]
-                                )
+                                x = lambda z: z.nonzero()[0]    
+                                data[m]["trans"][:, i][nan_idx] = np.interp(x(nan_idx), x(~nan_idx), vec[~nan_idx])
+                                print(f"Interpolated {np.sum(nan_idx)} nans")
 
                         result[f"file_{m}"] = {
                             "trans": data[m]["trans"],

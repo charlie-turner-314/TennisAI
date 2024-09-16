@@ -15,7 +15,7 @@ from Training.preprocess.preprocess_tennis import process_files, save_results
 from dataset_preparation.trajectory_correction.correct_trajectory import (
     correct_hybrik_mesh,
 )
-from dataset_preparation.spot.infer_tennis import infer_frame_dir, extract_frames_with_progress
+from dataset_preparation.spot.infer_tennis import infer_video, infer_frame_dir, extract_frames_with_progress
 from dataset_preparation.spot.spot_to_csv import spot_to_csv
 from dataset_preparation.spot.analyse_spot import identify_point_sequences, filter_and_condense_sequences, extract_sequences
 
@@ -36,7 +36,6 @@ def add_to_manifest(
     """
     Add the sequence to the manifest.json file
     """
-    # params
 
     manifest = []
     if os.path.exists("manifest.json"):
@@ -55,6 +54,14 @@ def add_to_manifest(
         }
     else:
         video = [v for v in manifest if v["name"] == vid][0]
+    # check if the video has already been processed
+    if any([s.get("clip") == video_name for s in video["sequences"]["fg"]]):
+        print(
+            COLORS.RED
+            + f"Video {video_name} has already been added to manifest. Skipping..."
+            + COLORS.ENDC
+        )
+        return
     keyframe_offset = 0  # offset to add to keyframe fid
     base = 0
     start = 0
@@ -173,35 +180,56 @@ for video_name in all_videos:
 # ======================
 # Run Spot
 # ======================
-events = infer_frame_dir(frame_dir)
+done = False
+if SKIP_EXISTING and os.path.exists(os.path.join(aux_dir, "events", "events.csv")):
+    # check that there are events for all videos
+    all_events = pd.read_csv(os.path.join(aux_dir, "events", "events.csv"))
+    if len(all_events["video"].unique()) == len(all_videos):
+        print(
+            COLORS.GREEN
+            + "Events already exist for all videos... Skipping spot detection"
+            + COLORS.ENDC
+        )
+        done = True
 event_dir = os.path.join(aux_dir, "events")
-os.makedirs(event_dir, exist_ok=True)
-spot_to_csv(events, os.path.join(event_dir, "events.csv"))
+if not done:
+    events = infer_frame_dir(frame_dir)
+    os.makedirs(event_dir, exist_ok=True)
+    spot_to_csv(events, os.path.join(event_dir, "events.csv"))
 # ======================
 # Extract Clips
 # ======================
 clip_dir = os.path.join(aux_dir, "clips")
 all_events = pd.read_csv(os.path.join(event_dir, "events.csv"))
 for vid in all_events["video"].unique():
-    frame_rate = cv2.VideoCapture(os.path.join(args.input_dir, vid)).get(cv2.CAP_PROP_FPS)
-    data = all_events[all_events["video"] == vid]
-    sequences = identify_point_sequences(data)
-    sequences = filter_and_condense_sequences(sequences)
-    extract_sequences(
-        sequences,
-        video_path=os.path.join(args.input_dir, vid),
-        output_dir=clip_dir,
-        sequence_dir=os.path.join(aux_dir, "sequences"),
-        frame_rate=frame_rate,
-    )
+    if SKIP_EXISTING and any([vid in v for v in os.listdir(clip_dir)]):
+        print(
+            COLORS.GREEN
+            + f"Clips for {vid} already exist... Skipping clip extraction"
+            + COLORS.ENDC
+        )
+        continue
+    else: 
+        frame_rate = cv2.VideoCapture(os.path.join(args.input_dir, vid + ".mp4")).get(cv2.CAP_PROP_FPS)
+        data = all_events[all_events["video"] == vid]
+        sequences = identify_point_sequences(data)
+        sequences = filter_and_condense_sequences(sequences)
+        extract_sequences(
+            sequences,
+            video_path=os.path.join(args.input_dir, vid + ".mp4"),
+            output_dir=clip_dir,
+            sequence_dir=os.path.join(aux_dir, "hits"),
+            frame_rate=frame_rate,
+        )
 
 all_clips = os.listdir(clip_dir)
 all_clips = [v for v in all_clips if v.endswith(".mp4")]
 all_clips.sort()
+failures = []
 
 # For each little clip
 for video_name in all_clips:
-    video_path = os.path.join(args.input_dir, video_name)
+    video_path = os.path.join(clip_dir, video_name)
     video_name = video_name.split(".")[0]
     print(COLORS.BLUE + f"Processing video: {video_path}" + COLORS.ENDC)
     # ======================
@@ -210,14 +238,19 @@ for video_name in all_clips:
     # check fps
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
     print("Original FPS", fps)
-    if fps > 30:
+    if fps > 32:
         out_file = os.path.join(os.path.dirname(video_path), "temp.mp4")
         os.system(
             f"ffmpeg -i {video_path} -r 30 -c:v libx264 -crf 18 -preset slow {out_file} -loglevel quiet"
         )
         os.rename(out_file, video_path)
         print("Resampled to 30fps")
+    cap = cv2.VideoCapture(video_path)
+    cap.release()
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    print("Frame count", frame_count)
     # ======================
     # Crop To Player
     # ======================
@@ -319,7 +352,8 @@ for video_name in all_clips:
         )
     else:
         os.makedirs(os.path.dirname(avi_file), exist_ok=True)
-        command = f"ffmpeg -i {infile} -vcodec mjpeg -q:v 3 -acodec pcm_s16le {avi_file} -loglevel quiet -y"
+        # command = f"ffmpeg -i {infile} -vcodec mjpeg -q:v 3 -acodec pcm_s16le {avi_file} -loglevel quiet -y"
+        command = f"ffmpeg -i {infile} -vcodec libx264 -pix_fmt yuv420p -acodec aac -strict experimental -b:a 192k {avi_file} -loglevel quiet -y"
         res = os.system(command)
         if res != 0:
             print(COLORS.RED + "Failed to convert video to AVI" + COLORS.ENDC)
@@ -369,26 +403,60 @@ for video_name in all_clips:
         )
     else:
         os.makedirs(os.path.join(aux_dir, "pose", "corrected"), exist_ok=True)
-        correct_hybrik_mesh(
+        success = correct_hybrik_mesh(
             processed_mesh_file=output_file,
             pose_file=os.path.join(aux_dir, "pose", f"{video_name}.json"),
             video_file=video_path,
             lines_file=lines_file,
             out_dir=os.path.join(aux_dir, "pose", "corrected"),
             cropped_json_file=os.path.join(aux_dir, "cropped", f"{video_name}.json"),
-            save_video=True,
+            save_video=False,
         )
+        if not success:
+            print(f"Failed to correct trajectory for video {video_name}.")
+            failures.append(video_name)
+            continue
 
     # ======================
     # Add to manifest.json by detecting the point and hit and keyframes
     # ======================
-    with open(os.path.join(aux_dir, "hits", f"{video_name}.json")) as f:
-        detected_hits = json.load(f)
-    
-    # get num frames in the video with ffmpeg
-    cap = cv2.VideoCapture(video_path)
-    num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    cap.release()
+    if SKIP_EXISTING and os.path.exists(
+        os.path.join(aux_dir, "sequence_hits", f"{video_name}.json")
+    ):
+        print(
+            COLORS.GREEN
+            + f"{video_name} Hits already detected... using those"
+            + COLORS.ENDC
+        )
+        with open(os.path.join(aux_dir, "sequence_hits", f"{video_name}.json"), "r") as f:
+            detected_hits = json.load(f)
+        with open(os.path.join(aux_dir, "cropped", f"{video_name}.json"), "r") as f:
+            cropped_info = json.load(f)
+            num_frames = len(cropped_info)
+    else:
+        detected_hits = infer_video(video_path)
+        # filter into only frames that are present in the cropped video
+        with open(os.path.join(aux_dir, "cropped", f"{video_name}.json"), "r") as f:
+            cropped_info = json.load(f)
+            num_frames = len(cropped_info)
+        frames = [c["frame"] for c in cropped_info]
+        detected_hits["events"] = [e for e in detected_hits["events"] if e["frame"] in frames]
+
+        for i, frame in enumerate(frames):
+            # if there is a hit for this frame, correct the frame to i
+            hit = [e for e in detected_hits["events"] if e["frame"] == frame]
+            if len(hit) > 0:
+                hit[0]["frame"] = i
+            
+        # assert that all frame numbers are from 0 > len(cropepd_info)
+        assert all([e["frame"] < num_frames for e in detected_hits["events"]])
+
+        # save to aux/sequence_hits/vid_name.json
+        os.makedirs(os.path.join(aux_dir, "sequence_hits"), exist_ok=True)
+        with open(os.path.join(aux_dir, "sequence_hits", f"{video_name}.json"), "w") as f:
+            json.dump(detected_hits, f)
+
+    print(COLORS.GREEN + f"Detected {len(detected_hits['events'])} hits in {len(cropped_info)} frames" + COLORS.ENDC)
     # get beta from processed data
     beta_file = os.path.abspath(
         os.path.join(aux_dir, "pose_3d", "processed", f"{video_name}.pkl")
@@ -432,8 +500,9 @@ if res != 0:
         + "Failed to convert processed data to motion_lib dataset."
         + COLORS.ENDC
     )
-    exit(1)
 
 print(COLORS.GREEN + f"Saved motion_lib data to: {args.mlib_dir}" + COLORS.ENDC)
+print(COLORS.RED + "Failed to process the following videos:", failures, COLORS.ENDC)
+
 
 print("Done!")

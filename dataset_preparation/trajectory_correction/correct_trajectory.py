@@ -175,7 +175,7 @@ def correct_hybrik_mesh(
     out_dir: str,
     cropped_json_file: str,
     save_video: bool = False,
-):
+) -> bool:
     filename = os.path.basename(video_file).split(".")[0]
     # use first frame
     frame = 0
@@ -210,86 +210,150 @@ def correct_hybrik_mesh(
             fps,
             (width, height),
         )
-    frame = 0
-    last_coords = []
+    frame = -1
     imputed = 0
     last_pose = None
+    crop_info = None
+    with open(cropped_json_file, "r") as f:
+        crop_info = json.load(f)
+    start_frame = crop_info[0]["frame"]
+    ankles = []
     while True:
         ret, img = vid.read()
         if not ret:
             break
-        if frame >= len(trans):
-            break
-        # Get the trans of this frame
-        frame_trans = trans[frame]
+        frame += 1
+        # check if crop_info contains the frame
+        if not frame in [crop["frame"] for crop in crop_info]:
+            continue
+        # rel_frame is the index of the frame in the cropped video
+        rel_frame = [crop["frame"] for crop in crop_info].index(frame)
         # get the ankles of this frame
-        frame_pose = pose[frame]
+        try:
+            frame_pose = pose[rel_frame] 
+        except:
+            print(f"Frame {rel_frame} not found in pose file")
+            print(f"Pose file has {len(pose)} frames")
+            print(f"Crop file has {len(crop_info)} frames")
 
-        if frame_pose["frame"] != frame:
-            raise ValueError("Frame number does not match")
+        assert frame_pose["frame"] == rel_frame
 
         left_ankle = (frame_pose.get("x15"), frame_pose.get("y15"))
         right_ankle = (frame_pose.get("x16"), frame_pose.get("y16"))
-        if left_ankle is None or left_ankle[0] == None:
-            left_ankle = right_ankle
-        if right_ankle is None or right_ankle[0] == None:
-            right_ankle = left_ankle
-        
-        frame_pose.update({"x15": left_ankle[0], "y15": left_ankle[1], "x16": right_ankle[0], "y16": right_ankle[1]})
+        # if they are 0, 0, then the pose is missing so set to None
+        if left_ankle == (0, 0):
+            left_ankle = (np.nan, np.nan)
+        if right_ankle == (0, 0):
+            right_ankle = (np.nan, np.nan)
+        if left_ankle == (None, None):
+            left_ankle = (np.nan, np.nan)
+        if right_ankle == (None, None):
+            right_ankle = (np.nan, np.nan)
+        ankles.append((left_ankle, right_ankle))
 
-        if left_ankle is None or right_ankle is None or left_ankle[0] is None or right_ankle[0] is None:
-            # use the last frame's pose
-            if last_pose is not None:
-                left_ankle = (last_pose.get("x15"), last_pose.get("y15"))
-                right_ankle = (last_pose.get("x16"), last_pose.get("y16"))
-            else:
-                raise ValueError("Ankle location not found")
-        
-        last_pose = frame_pose
+    # now we have all of the ankles, interpolate any missing ones
+    # there may be multiple missing in a row, so need to use linear interpolation both directions
+    ankles = np.array(ankles)  # Assuming shape (N, 2, 2)
+    print(ankles.shape)  # (187, 2, 2)
 
+    for i in range(2):
+        # Interpolate x and y separately for each ankle
+        for j in range(2):
+            ankle = np.array(ankles[:, j, i])
+            # Find the indices of the missing values
+            try:
+                missing = np.isnan(ankle)
+            except:
+                print(ankle)
+                raise ValueError("Ankle is not a numpy array")
+            # Find the indices of the non-missing values
+            not_missing = ~missing
+
+            # Proceed if there are missing values and at least two non-missing values for interpolation
+            if np.sum(not_missing) > 1 and np.sum(missing) > 0:
+                # Perform interpolation
+                interp_values = np.interp(
+                    np.flatnonzero(missing),        # Indices of the missing values
+                    np.flatnonzero(not_missing),    # Indices of the known values
+                    ankle[not_missing]              # Values of the known data points
+                )
+                # Assign the interpolated values to the missing indices
+                ankle[missing] = interp_values
+            elif np.sum(missing) > len(ankle) - 2:
+                return False
+            
+            # Assign the updated ankle back into the original array
+            ankles[:, j, i] = ankle
+
+    all_center_coords_court = []
+    for rel_frame in range(len(ankles)):
         # correct the pose locations by accounting for cropped video dimensions
-        with open(cropped_json_file, "r") as f:
-            crop = json.load(f)
-        crop = crop[frame]
-        # if crop["frame"] != frame:
-        #     if frame == 0:
-        #         # first frame
-        #         frame = crop[0]
-        #     else:
-        #         raise ValueError("Frame number does not match", frame, crop["frame"])
+        crop = crop_info[rel_frame]
+        left_ankle, right_ankle = ankles[rel_frame]
 
-        # print(left_ankle, crop)
         left_ankle = (left_ankle[0] + crop["x1"], left_ankle[1] + crop["y1"])
         right_ankle = (right_ankle[0] + crop["x1"], right_ankle[1] + crop["y1"])
-
         center = (
             (left_ankle[0] + right_ankle[0]) / 2,
             (left_ankle[1] + right_ankle[1]) / 2,
         )
+
         court_x, court_y = pixel_to_court_coords(
             center[0], center[1], K=K, rvec=rvec, tvec=tvec, lines=lines
         )
 
         # Sanity check -> how much has the player moved?
-        if len(last_coords) > 0:
-            diff = np.linalg.norm(
-                np.array((court_x, court_y)) - np.array(last_coords[-1])
-            )
+        if len(all_center_coords_court) > 0:
+            i = 1 
+            last_valid = all_center_coords_court[-i]
+            while last_valid[0] is None:
+                last_valid = all_center_coords_court[-i]
+                i += 1
+            diff = np.linalg.norm(np.array((court_x, court_y)) - np.array(last_valid))
             # NOTE: Magic Number
-            if diff > 1:  # more than 1 meter
-                # TODO: GLAMR - Too hard to work out
-                # For now. Use the moving av of up to 5 frames velocity to impute this frame
-                ma_len = 5 if len(last_coords) > 5 else len(last_coords)
-                vel = np.mean(np.diff(last_coords[-ma_len:], axis=0), axis=0)
-                # Impute the position
-                court_x, court_y = last_coords[-1] + vel
+            # more than 2 meter in one frame, around 60 m/s is too fast. Must be an error
+            if diff > i*2:
+                # set the coords to np.nan
+                court_x = court_y = np.nan
                 imputed += 1
+        all_center_coords_court.append((court_x, court_y))
 
-        last_coords.append((court_x, court_y))
+    # linearly interpolate court coords with numpy
+    all_center_coords_court = np.array(all_center_coords_court)
+    num_coords = len(all_center_coords_court)
+    all_center_coords_court = np.array(all_center_coords_court)
+    print(all_center_coords_court.shape)
+    missing = np.isnan(all_center_coords_court)
+    if np.sum(~missing) > 1 and np.sum(missing) > 0:
+        for i in range(2):
+            all_center_coords_court[:, i] = np.interp(
+                np.arange(num_coords),
+                np.arange(num_coords)[~missing[:, i]],
+                all_center_coords_court[~missing[:, i], i],
+            )
 
-        if court_x is None or court_y is None:
-            raise ValueError("Court coordinates not found for frame", frame)
+    all_center_coords_pixels = []
+    for frame in range(len(all_center_coords_court)):
+        court_x, court_y = all_center_coords_court[frame]
+        if court_x is None:
+            all_center_coords_pixels.append((np.nan, np.nan))
+            continue
+        pixel = cv2.projectPoints(
+            np.array([[court_x, court_y, 0]], dtype=np.float32),
+            rvec,
+            tvec,
+            K,
+            None,
+        )[0][0][0]
+        all_center_coords_pixels.append((pixel[0], pixel[1]))
+
+    assert len(trans) == len(all_center_coords_court)
+
+    for frame in range(len(all_center_coords_court)):
+        court_x, court_y = all_center_coords_court[frame]
+        assert court_x is not None and court_y is not None
         # update trans
+        frame_trans = trans[frame]
         frame_trans[:2] = [court_x, court_y]
         trans[frame] = frame_trans
 
@@ -297,8 +361,13 @@ def correct_hybrik_mesh(
         # TODO: Not sure how this works when the player has already been rotated in process_hybrik_data.py
         # R = cv2.Rodrigues(rvec)[0]  # rotation matrix
         # root_orient[frame] = R @ root_orient[frame]
+        center = all_center_coords_pixels[frame]
 
         if save_video:
+            # get the frame
+            orig_frame = crop_info[frame]["frame"]
+            vid.set(cv2.CAP_PROP_POS_FRAMES, orig_frame)
+            ret, img = vid.read()
             # overlay the text onto the image
             text = f"({frame_trans[0]:.2}, {frame_trans[1]:.2}, {frame_trans[2]:.2})"
             img = cv2.putText(
@@ -308,13 +377,19 @@ def correct_hybrik_mesh(
             img = cv2.circle(img, (int(center[0]), int(center[1])), 5, (0, 0, 255), -1)
             img = cv2.resize(img, (width, height))
             new_vid.write(img)
-        frame += 1
+
     vid.release()
     if save_video:
         new_vid.release()
 
     # save the mesh back to the file
     mesh["trans"] = trans
+    # need to check if any nans still
+    # if more than 50% nans in any column, then return False - we can't use this clip
+    for i in range(trans.shape[1]):
+        if np.sum(np.isnan(trans[:, i])) > 0.5 * trans.shape[0]:
+            return False
+
     # mesh["pose_aa"][:, :3] = root_orient
     mesh = {key: mesh}
     mesh_file_out = os.path.join(out_dir, os.path.basename(processed_mesh_file))
@@ -322,3 +397,4 @@ def correct_hybrik_mesh(
         joblib.dump(mesh, f)
 
     print(f"Imputed {imputed} frames out of {frame} frames")
+    return True
