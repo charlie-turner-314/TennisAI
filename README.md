@@ -14,6 +14,10 @@ This will:
 - Extract tennis playing sequences into the provided output file (motion library)
 - Make a `manifest.json` describing the sequences. **Note: all sequences are annotated as 'kyrgios', 'right handed', and 'eastern' grip. Correct annotation can be done after or incorporated as future work.**
 
+## Install dependencies
+- env.yml
+- isaac gym preview release 4
+
 ## Train the Embodied Pose Imitation Network
 
 Everything from here is done in the `Training` folder.
